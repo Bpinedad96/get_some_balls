@@ -14,8 +14,8 @@ from sensor_msgs.msg import Image
 # define the lower and upper boundaries of the "green"
 # ball in the HSV color space, then initialize the
 # list of tracked points
-greenLower = (29, 86, 6)
-greenUpper = (64, 255, 255)
+greenLower = (29, 65, 6) #29 86 6
+greenUpper = (60, 250, 250) #64 255 255
 
 #ROS information
 publisher = rospy.Publisher('visualization_marker', Marker)
@@ -60,11 +60,11 @@ while True:
 		# construct a mask for the color "green", then perform
 		# a series of dilations and erosions to remove any small
 		# blobs left in the mask
-		mask = cv2.inRange(hsv, greenLower, greenUpper)
-		mask = cv2.erode(mask, None, iterations=6)
-		mask = cv2.dilate(mask, None, iterations=6)
-		mask = cv2.dilate(mask, None, iterations=4)
-		mask = cv2.erode(mask, None, iterations=4)
+		mask = cv2.inRange(hsv, greenLower, greenUpper)#6 to 4
+		mask = cv2.erode(mask, None, iterations=8)
+		mask = cv2.dilate(mask, None, iterations=8)
+		mask = cv2.dilate(mask, None, iterations=5)
+		mask = cv2.erode(mask, None, iterations=5)
 		cv2.imshow("Frame2", mask)
 
 		# find contours in the mask and initialize the current
@@ -75,7 +75,7 @@ while True:
 
 		contours_area = []
 		contours_circles = []
-
+		marker = Marker()
 		# check if contour is of circular shape	
 		for con in cnts:
 			perimeter = cv2.arcLength(con, True)
@@ -84,7 +84,7 @@ while True:
 			if perimeter == 0:
 				break
 			circularity = 4*math.pi*(area/(perimeter*perimeter))
-			if 0.65 < circularity < 1.2 and area>50:
+			if 0.6 < circularity < 1.2 and area>800:
 				contours_circles.append(con)
 				contours_area.append(con)
 
@@ -103,7 +103,6 @@ while True:
 				cv2.circle(frame, center, 5, (0, 0, 255), -1)
 				cv2.putText(frame, "%.1f cm" % profundity, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
 
-				marker = Marker()
 				marker.header.frame_id = "/camera"
 				marker.type = marker.SPHERE
 				marker.action = marker.ADD
