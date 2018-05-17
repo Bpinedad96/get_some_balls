@@ -1,0 +1,6 @@
+ <!-- launch balls -->
+<launch>
+  <node name="balls" pkg="get_some_balls" type="follow.py" output="screen"/>
+  <include file="$(find model)/launch/complete.launch" name="robot_description" >
+  </include>
+</launch>

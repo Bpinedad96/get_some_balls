@@ -9,17 +9,19 @@ import cv2
 import rospy
 
 from visualization_msgs.msg import Marker
+from std_msgs.msg import Int8MultiArray
 from sensor_msgs.msg import Image
 
 
 # define the lower and upper boundaries of the "green"
 # ball in the HSV color space, then initialize the
 # list of tracked points
-greenLower = (29, 65, 6) #29 86 6
-greenUpper = (64, 255, 255) #64 255 255
+greenLower = (29, 52, 0) #23 51 85 
+greenUpper = (50, 255, 255) #39 125 255
 
 #ROS information
-publisher = rospy.Publisher('visualization_marker', Marker)
+publisher  = rospy.Publisher('visualization_marker', Marker)
+publisher2 = rospy.Publisher('servo_move', Int8MultiArray, queue_size = 10)
 
 rospy.init_node('balls')
 
@@ -46,6 +48,17 @@ F=697.67
 W=6.45
 x=0
 y=0
+
+marker = Marker()
+servo= Int8MultiArray()
+servo.data.append(0)
+servo.data.append(0)
+
+area=0
+area_before=0
+x_before=0
+y_before=0
+start=0
 
 # keep looping
 while True:
@@ -93,18 +106,29 @@ while True:
 		frame = imutils.resize(frame, width=1000)
 		
 
-		#blurred = cv2.GaussianBlur(frame, (11, 11), 0)
-		hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+		blurred = cv2.GaussianBlur(frame, (11, 11), 0)
+		hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 	 
 		# construct a mask for the color "green", then perform
 		# a series of dilations and erosions to remove any small
 		# blobs left in the mask
 		mask = cv2.inRange(hsv, greenLower, greenUpper)#6 to 4
-		mask = cv2.erode(mask, None, iterations=3)
-		mask = cv2.dilate(mask, None, iterations=3)
-		mask = cv2.dilate(mask, None, iterations=3)
-		mask = cv2.erode(mask, None, iterations=3)
 		cv2.imshow("Frame2", mask)
+
+
+		mask = cv2.erode(mask, None, iterations=3)
+		cv2.imshow("Frame3", mask)
+		mask = cv2.dilate(mask, None, iterations=3)
+		cv2.imshow("Frame4", mask)
+
+		mask = cv2.dilate(mask, None, iterations=5)
+		cv2.imshow("Frame5", mask)
+		mask = cv2.erode(mask, None, iterations=5)
+		cv2.imshow("Frame6", mask)
+
+
+
+
 
 		# find contours in the mask and initialize the current
 		# (x, y) center of the ball
@@ -114,7 +138,12 @@ while True:
 
 		contours_area = []
 		contours_circles = []
-		marker = Marker()
+		i=0
+		i_max=0
+		circularity_max=0
+		area_max=0
+					
+
 		# check if contour is of circular shape	
 		for con in cnts:
 			perimeter = cv2.arcLength(con, True)
@@ -123,45 +152,68 @@ while True:
 			if perimeter == 0:
 				break
 			circularity = 4*math.pi*(area/(perimeter*perimeter))
-			if 0.5 < circularity < 1.2 and area>800:
-				contours_circles.append(con)
-				contours_area.append(con)
-
-				((x, y), radius) = cv2.minEnclosingCircle(con)
+			if area>area_max and circularity>circularity_max:
+				area_max=area
+				circularity_max=circularity
+				i_max=i
+			i=i+1
 			
-				M = cv2.moments(con)
-				center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+		if 0.3 < circularity_max:
+			contours_circles.append(cnts[i_max])
+			contours_area.append(cnts[i_max])
 
-				# only proceed if the radius meets a minimum size
-				# draw the circle and centroid on the frame,
-				# then update the list of tracked points
-				cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
+			((x, y), radius) = cv2.minEnclosingCircle(cnts[i_max])
+		
+			M = cv2.moments(cnts[i_max])
+			center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-				#profundity=1103.9*(radius)**(-1.131) #eq obtaine by excel
-				profundity=(W*F)/(radius*2)
-				cv2.circle(frame, center, 5, (0, 0, 255), -1)
-				cv2.putText(frame, "%.1f cm" % profundity, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+			# only proceed if the radius meets a minimum size
+			# draw the circle and centroid on the frame,
+			# then update the list of tracked points
+			cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
 
-				marker.header.frame_id = "/camera"
-				marker.type = marker.SPHERE
-				marker.action = marker.ADD
-				marker.scale.x = 0.062
-				marker.scale.y = 0.062
-				marker.scale.z = 0.062
-				marker.color.a = 1.0
-				marker.color.g = 1.0
-				marker.pose.orientation.w = 1.0
-				marker.pose.position.x = profundity/100.00
-				marker.pose.position.y = ((w/4)-x)*(6.2/(radius*2))/100.00
-				marker.pose.position.z = ((h/2)-y)*(6.2/(radius*2))/100.00
-				marker.lifetime.secs = 0.01
+			#profundity=1103.9*(radius)**(-1.131) #eq obtaine by excel
+			profundity=(W*F)/(radius*2)
+			cv2.circle(frame, center, 5, (0, 0, 255), -1)
+			cv2.putText(frame, "%.1f cm" % profundity, (int(x), int(y)), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
+			if x<(w/2)-50:
+				servo.data[0]=1
+			elif x>(w/2)+50:
+				servo.data[0]=-1
 			else:
-				marker.action=marker.DELETE
+				servo.data[0]=0
+			
+			if y<(h/2)-50:
+				servo.data[1]=-1
+			elif y>(h/2)+50:
+				servo.data[1]=1
+			else:
+				servo.data[1]=0
+
+			marker.header.frame_id = "/camera"
+			marker.type = marker.SPHERE
+			marker.action = marker.ADD
+			marker.scale.x = 0.062
+			marker.scale.y = 0.062
+			marker.scale.z = 0.062
+			marker.color.a = 1.0
+			marker.color.g = 1.0
+			marker.pose.orientation.w = 1.0
+			marker.pose.position.x = profundity/100.00
+			marker.pose.position.y = ((w/4)-x)*(6.2/(radius*2))/100.00
+			marker.pose.position.z = ((h/2)-y)*(6.2/(radius*2))/100.00
+			marker.lifetime.secs = 0.01
+
+			area_before=area
+		else:
+			marker.action=marker.DELETE
+			servo.data[0]=0
+			servo.data[1]=0
+				
 
 		publisher.publish(marker)
-		print ("X"+str(x))
-		print ("Y"+str(y))
-
+		publisher2.publish(servo)
 
 		# show the frame to our screen
 		cv2.imshow("Frame", frame)
