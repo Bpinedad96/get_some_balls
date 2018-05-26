@@ -15,3 +15,5 @@ To callibrate use script located in scripts:
 
 python callibrate.py --filter HSV --webcam
 
+Distances is published in servo_move data[2]
+Angle is published in servo_pos
